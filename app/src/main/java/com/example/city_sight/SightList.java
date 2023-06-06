@@ -1,6 +1,7 @@
 package com.example.city_sight;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.AdapterView;
@@ -13,27 +14,36 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.example.city_sight.sight.Sight;
 import com.yandex.mapkit.MapKitFactory;
 import com.yandex.mapkit.geometry.Point;
+import com.yandex.mapkit.location.FilteringMode;
+import com.yandex.mapkit.location.LocationListener;
+import com.yandex.mapkit.location.LocationManager;
+import com.yandex.mapkit.location.LocationStatus;
 
 import java.util.ArrayList;
 
 public class SightList extends AppCompatActivity {
+    private static final int PERMISSIONS_REQUEST_FINE_LOCATION = 1;
     ArrayList<Sight> sights = toCreateSights();
     ArrayList<String> titles = toCreateSights(sights);
 
+    private ListView sightList;
     CheckBox locationCheckbox;
     EditText radiusEditText;
     Button applyButton;
     User user;
     double radius = Double.MAX_VALUE;
-    private ListView sightList;
-    private double selectedRadius = 0.0;
+    LocationManager locationManager;
 
-
+    Double latitude;
+    Double longitude;
     TextView textView;
     private static final int PERMISSION_REQUEST_CODE = 100;
 
@@ -41,8 +51,10 @@ public class SightList extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         MapKitFactory.setApiKey("3e9ed211-3558-476a-ab52-9b29735e3a9e");
+        MapKitFactory.initialize(this);
         setContentView(R.layout.activity_sight_list);
         locationCheckbox = findViewById(R.id.locationCheckbox);
+        locationManager = MapKitFactory.getInstance().createLocationManager();
 
         Bundle arguments = getIntent().getExtras();
 
@@ -86,7 +98,23 @@ public class SightList extends AppCompatActivity {
             if (!radiusText.equals("")) {
                 radius = Double.parseDouble(radiusText);
             }
-            displaySightsInRadius(55.750440, 37.719799, radius);
+            requestLocationPermission();
+            locationManager = MapKitFactory.getInstance().createLocationManager();
+            // Request location updates
+            locationManager.subscribeForLocationUpdates(60000, 50, 0, true, FilteringMode.ON, new LocationListener() {
+
+                        @Override
+                        public void onLocationUpdated(@NonNull com.yandex.mapkit.location.Location location) {
+                            latitude = location.getPosition().getLatitude();
+                            longitude = location.getPosition().getLongitude();
+                            displaySightsInRadius(latitude, longitude, radius);
+                        }
+
+                        @Override
+                        public void onLocationStatusUpdated(@NonNull LocationStatus locationStatus) {
+                        }
+                    }
+            );
         } else {
             displayAllSights();
         }
@@ -144,6 +172,16 @@ public class SightList extends AppCompatActivity {
         intent.putExtra("latitude", sight.getCoordinates().getLatitude());
         intent.putExtra("longitude", sight.getCoordinates().getLongitude());
         startActivity(intent);
+    }
+
+    private void requestLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this,
+                "android.permission.ACCESS_FINE_LOCATION")
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{"android.permission.ACCESS_FINE_LOCATION"},
+                    PERMISSIONS_REQUEST_FINE_LOCATION);
+        }
     }
 
     public ArrayList<Sight> toCreateSights() {
@@ -231,7 +269,7 @@ public class SightList extends AppCompatActivity {
 
     public ArrayList<String> toCreateSights(ArrayList<Sight> sights) {
         ArrayList<String> titles = new ArrayList<>();
-        for (Sight sight: sights) {
+        for (Sight sight : sights) {
             titles.add(sight.getTitle());
         }
         return titles;
